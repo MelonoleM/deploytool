@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -32,6 +33,9 @@ func TestValidateRejectsUnknownDependency(t *testing.T) {
 // A Windows path override must survive being substituted into a double-quoted
 // YAML scalar, which is how the shipped example config references install_root.
 func TestLoadEscapesWindowsPathOverrideInsideQuotedScalar(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("windows-only path handling")
+	}
 	t.Setenv("INSTALL_ROOT", `C:\demo\runtime`)
 	d := t.TempDir()
 	p := filepath.Join(d, "deploytool.yaml")
