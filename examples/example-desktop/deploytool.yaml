@@ -1,0 +1,89 @@
+# Runnable Windows demo. Run prepare.ps1 first; ports are deliberately in a high local range.
+apiVersion: v1
+config_version: "1.0.0"
+project: {name: all-types-live-demo, version: "1.0.0", portal: "http://127.0.0.1:18105/"}
+vars: {install_root: ./runtime-live}
+services:
+    - name: bootstrap-exe
+      type: exe
+      workdir: "bootstrap-exe"
+      install:
+        steps:
+            - {action: mkdir, path: "{{ .workdir }}"}
+            - {action: copy_file, src: build/bootstrap-exe.exe, dest: "{{ .workdir }}/application.exe"}
+      start: ".\\application.exe --port 18100 --name bootstrap-exe"
+      start_mode: background
+      healthcheck: {type: http, url: 'http://127.0.0.1:18100/healthz', interval: 200ms, timeout: 5s, retries: 15}
+      enabled: false
+    - name: python-worker
+      type: python
+      workdir: "python-worker"
+      depends_on: [bootstrap-exe]
+      install:
+        steps:
+            - {action: mkdir, path: "{{ .workdir }}"}
+            - {action: copy_file, src: build/python-app.py, dest: "{{ .workdir }}/app.py"}
+      start: "python app.py --port 18101 --name python-worker"
+      start_mode: background
+      healthcheck: {type: http, url: 'http://127.0.0.1:18101/healthz', interval: 200ms, timeout: 5s, retries: 15}
+      enabled: true
+    - name: java-api
+      type: java
+      workdir: "java-api"
+      depends_on: [bootstrap-exe]
+      install:
+        steps:
+            - {action: mkdir, path: "{{ .workdir }}"}
+            - {action: copy_file, src: build/ExampleServer.class, dest: "{{ .workdir }}/ExampleServer.class"}
+      start: "java -cp . ExampleServer 18102 java-api"
+      start_mode: console
+      healthcheck: {type: http, url: 'http://127.0.0.1:18102/healthz', interval: 200ms, timeout: 5s, retries: 15}
+    # Same runtime as java-api, but delivered as a single jar artifact. Typical for
+    # real releases, where the packaged jar (plus its manifest Class-Path) is the
+    # deployment unit instead of loose class files.
+    - name: java-jar-api
+      type: java
+      workdir: "java-jar-api"
+      depends_on: [bootstrap-exe]
+      install:
+        steps:
+            - {action: mkdir, path: "{{ .workdir }}"}
+            - {action: copy_file, src: build/java-jar-api.jar, dest: "{{ .workdir }}/java-jar-api.jar"}
+      start: "java -jar java-jar-api.jar 18106 java-jar-api"
+      start_mode: background
+      healthcheck: {type: http, url: 'http://127.0.0.1:18106/healthz', interval: 200ms, timeout: 5s, retries: 15}
+    - name: nodejs-web
+      type: nodejs
+      workdir: "nodejs-web"
+      depends_on: [java-api]
+      install:
+        steps:
+            - {action: mkdir, path: "{{ .workdir }}"}
+            - {action: copy_file, src: build/node-app.js, dest: "{{ .workdir }}/app.js"}
+      start: "node app.js --port 18103 --name nodejs-web"
+      start_mode: background
+      healthcheck: {type: http, url: 'http://127.0.0.1:18103/healthz', interval: 200ms, timeout: 5s, retries: 15}
+      enabled: false
+    - name: go-gateway
+      type: go
+      workdir: "go-gateway"
+      depends_on: [java-api]
+      install:
+        steps:
+            - {action: mkdir, path: "{{ .workdir }}"}
+            - {action: copy_file, src: build/bootstrap-exe.exe, dest: "{{ .workdir }}/gateway.exe"}
+      start: ".\\gateway.exe --port 18104 --name go-gateway"
+      start_mode: background
+      healthcheck: {type: http, url: 'http://127.0.0.1:18104/healthz', interval: 200ms, timeout: 5s, retries: 15}
+    - name: nginx-proxy
+      type: nginx
+      workdir: "nginx-proxy"
+      depends_on: [nodejs-web, go-gateway]
+      install:
+        steps:
+            - {action: mkdir, path: "{{ .workdir }}"}
+            - {action: copy_file, src: build/nginx-proxy.exe, dest: "{{ .workdir }}/proxy.exe"}
+      start: ".\\proxy.exe --port 18105 --name nginx-proxy --upstream http://127.0.0.1:18104"
+      start_mode: background
+      healthcheck: {type: http, url: 'http://127.0.0.1:18105/healthz', interval: 200ms, timeout: 5s, retries: 15}
+update_policy: {strategy: rolling, backup_before_update: true, rollback_on_failure: true}

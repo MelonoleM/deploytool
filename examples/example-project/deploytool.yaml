@@ -1,0 +1,65 @@
+# Offline-safe smoke test: every supported type installs files but starts no process.
+apiVersion: v1
+config_version: "1.0.0"
+project: { name: all-types-example, version: "1.0.0" }
+vars:
+  install_root: ./runtime # Override with INSTALL_ROOT outside this repository.
+  env: development
+
+services:
+  - name: bootstrap-exe
+    type: exe
+    workdir: "bootstrap-exe"
+    install: &common_install
+      steps:
+        - { action: mkdir, path: "{{ .workdir }}" }
+        - { action: copy_file, src: assets/service.marker, dest: "{{ .workdir }}/service.marker" }
+        - { action: render_template, src: templates/service.conf.tpl, dest: "{{ .workdir }}/conf/service.conf" }
+        - { action: write_env, path: "{{ .workdir }}/.env", content: "OFFLINE_DEPLOYMENT=true" }
+    # Real package example: start: "./application"
+
+  - name: python-worker
+    type: python
+    workdir: "python-worker"
+    depends_on: [bootstrap-exe]
+    install: *common_install
+    # Real package example: start: "./python/bin/python app.py"
+
+  - name: java-api
+    type: java
+    workdir: "java-api"
+    depends_on: [bootstrap-exe]
+    install: *common_install
+    # Real package example: start: "./jre/bin/java -jar app.jar"
+
+  - name: nodejs-web
+    type: nodejs
+    workdir: "nodejs-web"
+    depends_on: [java-api]
+    install: *common_install
+    # Real package example: start: "./node/bin/node server.js"
+
+  - name: go-gateway
+    type: go
+    workdir: "go-gateway"
+    depends_on: [java-api]
+    install: *common_install
+    # Real package example: start: "./gateway"
+
+  - name: nginx-proxy
+    type: nginx
+    workdir: "nginx-proxy"
+    depends_on: [nodejs-web, go-gateway]
+    install: *common_install
+    # Real package example: start: "./nginx/sbin/nginx -c conf/nginx.conf"
+
+  - name: optional-batch-worker
+    type: python
+    enabled: false
+    workdir: "optional-batch-worker"
+    depends_on: [bootstrap-exe]
+
+update_policy:
+  strategy: rolling
+  backup_before_update: true
+  rollback_on_failure: true

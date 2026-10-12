@@ -1,0 +1,32 @@
+# ---- Build artifacts ----
+/dist/
+/artifacts/
+/examples/example-desktop/build/
+/examples/example-project/build/
+
+# ---- Runtime state (install roots, logs, overrides) ----
+/runtime/
+/runtime-live/
+/examples/example-project/runtime/
+/examples/example-desktop/runtime-live/
+.deploytool/
+*.install_root
+*.pid
+
+# ---- IDE and editor ----
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- Backups, archives, and compiler residue ----
+*.zip
+*.tar.gz
+*.bak
+*.bak-*
+*~
+*.exe~

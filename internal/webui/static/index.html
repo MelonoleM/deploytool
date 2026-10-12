@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>deploytool</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">▦</div>
+      <div class="brand-text">
+        <h1>部署工具</h1>
+        <span id="project-sub" class="muted">加载中…</span>
+      </div>
+    </div>
+    <div class="top-actions">
+      <div class="dropdown" id="settings">
+        <button class="icon-btn" id="settings-btn" title="设置" aria-haspopup="true">
+          <svg class="gear" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.48.48 0 0 0-.12-.61l-2.01-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"/>
+          </svg>
+          <span class="red-dot hidden" id="settings-dot" aria-hidden="true"></span>
+        </button>
+        <div class="dropdown-menu hidden" id="settings-menu" role="menu">
+          <button data-menu="update" role="menuitem" disabled>更新</button>
+          <button data-menu="pack" role="menuitem" disabled>打包</button>
+          <button data-menu="refresh" role="menuitem">刷新</button>
+          <button data-menu="settings" role="menuitem">设置</button>
+          <button data-menu="help" role="menuitem">帮助</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- 首次安装引导 -->
+    <section id="view-onboarding" class="view hidden">
+      <div class="onboard-head">
+        <div class="onboard-head-row">
+          <h2>首次安装设置</h2>
+          <span id="config-modified" class="badge hidden">已修改</span>
+        </div>
+        <p class="muted">展开每个服务进行配置，或直接使用默认配置开始安装。</p>
+      </div>
+      <div id="onboard-config"></div>
+      <div class="onboard-foot">
+        <label class="start-after-check">
+          <input type="checkbox" id="start-after-install"> 安装完成后自动启动
+        </label>
+        <button class="btn btn-lg" id="start-install">开始安装</button>
+      </div>
+    </section>
+
+    <!-- 日常维护 -->
+    <section id="view-maintenance" class="view hidden">
+      <div class="tabs">
+        <button class="tab active" data-tab="installed">已安装</button>
+        <button class="tab" data-tab="not-installed">未安装</button>
+      </div>
+      <div class="bulk-bar" id="bulk-bar"></div>
+      <div id="service-cards" class="cards"></div>
+    </section>
+  </main>
+
+  <!-- 欢迎弹窗 -->
+  <dialog id="welcome-dialog" class="center-dialog">
+    <div class="welcome">
+      <div class="welcome-logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+          <polyline points="2 12 12 17 22 12"/>
+          <polyline points="2 17 12 22 22 17"/>
+        </svg>
+      </div>
+      <h2 id="welcome-title">欢迎使用 deploytool</h2>
+      <p id="welcome-desc" class="muted"></p>
+      <ul id="welcome-features" class="features"></ul>
+      <p id="welcome-guide" class="guide"></p>
+      <button class="btn btn-lg" id="welcome-start">开始</button>
+    </div>
+  </dialog>
+
+  <!-- 安装/卸载/启停进度弹窗 -->
+  <dialog id="progress-dialog">
+    <div class="dialog-head">
+      <h2 id="progress-title">进行中</h2>
+      <button class="icon-btn" id="progress-close" aria-label="关闭">✕</button>
+    </div>
+    <div id="progress-list" class="progress-list"></div>
+    <div class="dialog-foot">
+      <button class="btn btn-ghost" id="progress-done">完成</button>
+    </div>
+  </dialog>
+
+  <!-- 配置编辑弹窗 -->
+  <dialog id="config-dialog">
+    <div class="dialog-head">
+      <h2 id="config-dialog-title">编辑配置</h2>
+      <button class="icon-btn" id="config-close" aria-label="关闭">✕</button>
+    </div>
+    <div id="config-dialog-body"></div>
+  </dialog>
+
+  <!-- 更新 / 打包弹窗 -->
+  <dialog id="ops-dialog">
+    <form method="dialog" class="ops">
+      <div class="ops-head">
+        <h2 id="ops-title">更新 / 打包</h2>
+        <button class="icon-btn" value="cancel" aria-label="关闭">✕</button>
+      </div>
+      <fieldset id="ops-update">
+        <legend>增量更新</legend>
+        <label class="field">
+          <span>更新包路径 (.tar.gz)</span>
+          <input id="update-package" type="text" placeholder="artifacts/nodejs-web-v2.tar.gz">
+        </label>
+        <label class="field">
+          <span>目标服务</span>
+          <select id="update-only"><option value="">全部服务</option></select>
+        </label>
+        <button type="button" class="btn" id="update-run">执行更新</button>
+      </fieldset>
+      <fieldset id="ops-pack">
+        <legend>打包</legend>
+        <label class="field">
+          <span>源目录</span>
+          <input id="pack-src" type="text" placeholder="examples/example-project/updates/nodejs-web-v2">
+        </label>
+        <label class="field">
+          <span>输出文件 (.tar.gz)</span>
+          <input id="pack-out" type="text" placeholder="artifacts/out.tar.gz">
+        </label>
+        <button type="button" class="btn" id="pack-run">执行打包</button>
+      </fieldset>
+    </form>
+  </dialog>
+
+  <!-- 帮助弹窗 -->
+  <dialog id="help-dialog" class="center-dialog">
+    <div class="help">
+      <div class="dialog-head">
+        <h2>帮助</h2>
+        <button class="icon-btn" id="help-close" aria-label="关闭">✕</button>
+      </div>
+      <div class="help-body">
+        <p><b>项目</b>：<span id="help-project-name"></span> · 版本 <span id="help-project-version"></span></p>
+        <p><b>命令行</b>：<code>deploytool &lt;install|uninstall|update|start|stop|status|ui|pack&gt;</code></p>
+        <p>所有命令用 <code>--config</code> 指定配置文件；<code>--only svc1,svc2</code> 只处理指定服务。</p>
+        <p><b>控制台</b>：已安装与未安装服务分开管理，未安装可一键安装，已安装可一键启动 / 停止 / 卸载。</p>
+        <p><b>配置</b>：编辑的是 YAML 文件本身，支持保存与重置回初始值。</p>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- 设置弹窗 -->
+  <dialog id="settings-dialog">
+    <div class="dialog-head">
+      <h2>设置</h2>
+      <button class="icon-btn" id="settings-close" aria-label="关闭">✕</button>
+    </div>
+    <div class="settings-layout">
+      <nav class="settings-nav">
+        <button class="settings-nav-item active" data-settings-tab="common">常用</button>
+        <button class="settings-nav-item" data-settings-tab="about">
+          关于DeployTool
+          <span class="red-dot hidden" id="about-dot" aria-hidden="true"></span>
+        </button>
+      </nav>
+      <div class="settings-panel" id="settings-panel"></div>
+    </div>
+  </dialog>
+
+  <!-- 更新提示弹窗 -->
+  <dialog id="update-dialog" class="center-dialog">
+    <div class="update-prompt">
+      <div class="update-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+          <polyline points="21 3 21 9 15 9"/>
+        </svg>
+      </div>
+      <h2>发现新版本</h2>
+      <p id="update-prompt-msg" class="muted"></p>
+      <div class="update-actions">
+        <button class="btn btn-ghost" id="update-later">稍后更新</button>
+        <button class="btn" id="update-now">更新</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- 更新详情弹窗 -->
+  <dialog id="update-details-dialog">
+    <div class="dialog-head">
+      <h2>更新详情</h2>
+      <button class="icon-btn" id="update-details-close" aria-label="关闭">✕</button>
+    </div>
+    <div id="update-details-body" class="update-details-body"></div>
+  </dialog>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

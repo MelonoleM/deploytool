@@ -1,0 +1,18 @@
+# Normalize line endings for text files across platforms.
+* text=auto
+
+# Source and scripts keep LF so they build and run on Linux / macOS too.
+*.go text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Binaries are never line-ending normalized.
+*.exe binary
+*.class binary
+*.jar binary
+*.tar.gz binary
+*.dll binary
+*.png binary
+*.jpg binary
