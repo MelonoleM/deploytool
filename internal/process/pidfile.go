@@ -2,6 +2,7 @@ package process
 
 import (
 	"context"
+	"deploytool/internal/logger"
 	"fmt"
 	"os"
 	"os/exec"
@@ -41,6 +42,11 @@ func RunBackground(command, workdir, logPath string, env map[string]string, pidP
 		c.Stderr = os.Stderr
 	} else {
 		if e := os.MkdirAll(filepath.Dir(logPath), 0755); e != nil {
+			return 0, e
+		}
+		// Roll an oversized service log before opening a fresh one, so a
+		// long-running deployment never grows a single unbounded file.
+		if e := logger.RotateLogFile(logPath, logger.DefaultMaxBytes, logger.DefaultKeep); e != nil {
 			return 0, e
 		}
 		f, e := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
