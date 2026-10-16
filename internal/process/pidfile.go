@@ -15,12 +15,13 @@ import (
 )
 
 func Run(command, workdir string) (int, error) {
-	return RunBackground(command, workdir, "", nil)
+	return RunBackground(command, workdir, "", nil, "")
 }
 
 // RunBackground starts a process without tying its output to the invoking terminal.
-// When logPath is supplied both stdout and stderr are appended to that file.
-func RunBackground(command, workdir, logPath string, env map[string]string) (int, error) {
+// When logPath is supplied both stdout and stderr are appended to that file. When
+// pidPath is supplied the child process id is written there.
+func RunBackground(command, workdir, logPath string, env map[string]string, pidPath string) (int, error) {
 	if strings.TrimSpace(command) == "" {
 		return 0, nil
 	}
@@ -53,8 +54,13 @@ func RunBackground(command, workdir, logPath string, env map[string]string) (int
 		return 0, e
 	}
 	pid := c.Process.Pid
-	if e := os.WriteFile(filepath.Join(workdir, ".deploytool.pid"), []byte(strconv.Itoa(pid)), 0600); e != nil {
-		return 0, e
+	if pidPath != "" {
+		if e := os.MkdirAll(filepath.Dir(pidPath), 0755); e != nil {
+			return 0, e
+		}
+		if e := os.WriteFile(pidPath, []byte(strconv.Itoa(pid)), 0600); e != nil {
+			return 0, e
+		}
 	}
 	return pid, nil
 }
@@ -164,14 +170,14 @@ func Alive(pid int) bool {
 	return p.Signal(syscall.Signal(0)) == nil
 }
 
-// RemovePID deletes the per-service pid file written by RunBackground. The file is
-// operator-facing bookkeeping, so a stale copy after a stop would be misleading;
-// an already-absent file is not an error.
-func RemovePID(workdir string) error {
-	if strings.TrimSpace(workdir) == "" {
+// RemovePID deletes the pid file written by RunBackground or RunConsoleWindow. The
+// file is operator-facing bookkeeping, so a stale copy after a stop would be
+// misleading; an already-absent file is not an error.
+func RemovePID(pidPath string) error {
+	if strings.TrimSpace(pidPath) == "" {
 		return nil
 	}
-	e := os.Remove(filepath.Join(workdir, ".deploytool.pid"))
+	e := os.Remove(pidPath)
 	if e != nil && !os.IsNotExist(e) {
 		return e
 	}

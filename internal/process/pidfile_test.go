@@ -20,15 +20,14 @@ func TestRunConsoleWaitsForSuccessfulCommand(t *testing.T) {
 }
 
 func TestRemovePID(t *testing.T) {
-	dir := t.TempDir()
-	if err := RemovePID(dir); err != nil {
+	p := filepath.Join(t.TempDir(), ".deploytool.pid")
+	if err := RemovePID(p); err != nil {
 		t.Fatalf("an absent pid file must not be an error: %v", err)
 	}
-	p := filepath.Join(dir, ".deploytool.pid")
 	if err := os.WriteFile(p, []byte("1234"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := RemovePID(dir); err != nil {
+	if err := RemovePID(p); err != nil {
 		t.Fatalf("remove pid file: %v", err)
 	}
 	if _, err := os.Stat(p); !os.IsNotExist(err) {

@@ -238,7 +238,7 @@ Invoke-RestMethod http://127.0.0.1:18103/healthz
 
 升级前健康接口返回 `{"service":"nodejs-web","status":"ok"}`，升级后返回 `{"service":"nodejs-web","status":"ok","version":"v2"}`。
 
-`pack` 会自动生成 `manifest.json`；`update` 会校验 SHA-256、停止服务、把被替换的文件备份到 `<workdir>\.deploytool_backup\<时间戳>\`、替换文件、重新启动并做健康检查。失败且 `rollback_on_failure: true` 时会用备份回滚。备份目录在卸载时会被一并清理。
+`pack` 会自动生成 `manifest.json`；`update` 会校验 SHA-256、停止服务、把被替换的文件备份到 `<install_root>\.deploytool\backups\<服务名>\<时间戳>\`、替换文件、重新启动并做健康检查。失败且 `rollback_on_failure: true` 时会用备份回滚。备份目录在卸载时会被一并清理。
 
 ## 9. 卸载与现场清理
 

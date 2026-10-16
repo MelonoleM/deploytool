@@ -185,7 +185,7 @@ func (o *Orchestrator) Update(ctx context.Context, pkg string, only []string, pr
 			continue
 		}
 		notify(Progress{Service: s.Name, Phase: "running", Index: i, Total: len(svcs)})
-		backup := filepath.Join(s.Workdir, ".deploytool_backup", fmt.Sprint(time.Now().UnixNano()))
+		backup := filepath.Join(backupDir(o.Root, s.Name), fmt.Sprint(time.Now().UnixNano()))
 		changed := []state.FileEntry{}
 		for _, f := range m.Files {
 			src := filepath.Join(tmp, filepath.FromSlash(f.Path))
@@ -398,10 +398,11 @@ func (o *Orchestrator) startOne(ctx context.Context, s config.Service) error {
 	}
 	var pid int
 	var e error
+	pidPath := pidFilePath(o.Root, s.Name)
 	if s.StartMode == "console" {
-		pid, e = process.RunConsoleWindow(s.Start, s.Workdir, s.Env)
+		pid, e = process.RunConsoleWindow(s.Start, s.Workdir, s.Env, pidPath)
 	} else {
-		pid, e = process.RunBackground(s.Start, s.Workdir, filepath.Join(o.Root, ".deploytool", "logs", s.Name+".log"), s.Env)
+		pid, e = process.RunBackground(s.Start, s.Workdir, filepath.Join(o.Root, ".deploytool", "logs", s.Name+".log"), s.Env, pidPath)
 	}
 	if e != nil {
 		return e
@@ -456,7 +457,7 @@ func (o *Orchestrator) stopOne(_ context.Context, s config.Service) error {
 	rec.PID = 0
 	rec.State = string(Stopped)
 	rec.Reason = ""
-	_ = process.RemovePID(s.Workdir)
+	_ = process.RemovePID(pidFilePath(o.Root, s.Name))
 	return o.Store.Put(s.Name, rec)
 }
 func (o *Orchestrator) uninstallOne(ctx context.Context, s config.Service) error {
@@ -470,7 +471,7 @@ func (o *Orchestrator) uninstallOne(ctx context.Context, s config.Service) error
 	_ = o.stopOne(ctx, s)
 	// Clear tool-owned runtime bookkeeping before replaying the recorded inverse
 	// actions, so the service work directory can be removed once it is empty.
-	removeBackups(s.Workdir)
+	removeBackups(backupDir(o.Root, s.Name))
 	for i := len(rec.Inverses) - 1; i >= 0; i-- {
 		v := rec.Inverses[i]
 		if e := undo(ctx, v); e != nil {
@@ -736,13 +737,24 @@ func restoreTree(src, dst string) error {
 	})
 }
 
-// removeBackups drops the update backup directory created next to a service work
-// directory. Backups only protect an in-flight update, so uninstall discards them.
-func removeBackups(workdir string) {
-	if strings.TrimSpace(workdir) == "" {
+// pidFilePath returns the tool-owned pid file location for a service, kept under
+// the install root's .deploytool directory so the service work directory stays clean.
+func pidFilePath(root, name string) string {
+	return filepath.Join(root, ".deploytool", "pids", name+".pid")
+}
+
+// backupDir returns the per-service update backup directory under .deploytool.
+func backupDir(root, name string) string {
+	return filepath.Join(root, ".deploytool", "backups", name)
+}
+
+// removeBackups drops the per-service update backup directory. Backups only
+// protect an in-flight update, so uninstall discards them.
+func removeBackups(dir string) {
+	if strings.TrimSpace(dir) == "" {
 		return
 	}
-	_ = os.RemoveAll(filepath.Join(workdir, ".deploytool_backup"))
+	_ = os.RemoveAll(dir)
 }
 func run(ctx context.Context, cmd string) error {
 	if strings.TrimSpace(cmd) == "" {

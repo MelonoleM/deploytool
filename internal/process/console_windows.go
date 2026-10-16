@@ -20,7 +20,7 @@ const (
 // the child process id without blocking. The window belongs to the child process,
 // so its standard handles are deliberately left unset: os/exec would otherwise
 // force them to a pipe or NUL and leave the window blank.
-func RunConsoleWindow(command, workdir string, env map[string]string) (int, error) {
+func RunConsoleWindow(command, workdir string, env map[string]string, pidPath string) (int, error) {
 	if strings.TrimSpace(command) == "" {
 		return 0, nil
 	}
@@ -54,8 +54,13 @@ func RunConsoleWindow(command, workdir string, env map[string]string) (int, erro
 	defer syscall.CloseHandle(pi.Process)
 	defer syscall.CloseHandle(pi.Thread)
 	pid := int(pi.ProcessId)
-	if err := os.WriteFile(filepath.Join(workdir, ".deploytool.pid"), []byte(strconv.Itoa(pid)), 0600); err != nil {
-		return 0, err
+	if pidPath != "" {
+		if err := os.MkdirAll(filepath.Dir(pidPath), 0755); err != nil {
+			return 0, err
+		}
+		if err := os.WriteFile(pidPath, []byte(strconv.Itoa(pid)), 0600); err != nil {
+			return 0, err
+		}
 	}
 	return pid, nil
 }
