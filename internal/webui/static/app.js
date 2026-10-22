@@ -12,6 +12,7 @@ const state = {
   progressOpen: false,
   mode: { native: false, portal: "" },
   autoOpenPortal: true,
+  startAfterInstall: false,
   update: { has_update: false, current_version: "", baseline_version: "", dismissed: false },
 };
 
@@ -527,6 +528,14 @@ function renderMaintenance() {
     addBulk(bar, "一键卸载", () => bulkAction("uninstall", installed, "卸载"), true);
     addBulk(bar, "进入主页", openPortal, false, "bulk-portal");
   } else {
+    const check = el("label", "start-after-check");
+    const cb = el("input");
+    cb.type = "checkbox";
+    cb.id = "notinstalled-start-after-install";
+    cb.checked = !!state.startAfterInstall;
+    cb.addEventListener("change", () => { state.startAfterInstall = cb.checked; });
+    check.append(cb, "安装后立即启动");
+    bar.appendChild(check);
     addBulk(bar, "一键安装", () => bulkAction("install", notInstalled.filter((s) => s.enabled), "安装"));
   }
 
@@ -621,7 +630,7 @@ function toggleCardLog(card, svc) {
 function singleAction(action, svc, verb) {
   if (action === "uninstall" && !window.confirm(`确定卸载 ${svc.name} 吗？`)) return;
   const body = { only: [svc.name] };
-  if (action === "install") body.start = true;
+  if (action === "install") body.start = !!state.startAfterInstall;
   openProgress({
     title: `${verb}服务`,
     verb,
@@ -636,7 +645,7 @@ function bulkAction(action, targets, verb, after) {
   if (!targets.length) return toast("没有可操作的服务", "info");
   if (action === "uninstall" && !window.confirm(`确定卸载 ${targets.length} 个服务吗？`)) return;
   const body = { only: targets.map((s) => s.name) };
-  if (action === "install") body.start = true;
+  if (action === "install") body.start = !!state.startAfterInstall;
   openProgress({
     title: `${verb}服务`,
     verb,

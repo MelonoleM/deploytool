@@ -173,7 +173,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 20px; }
 }
 .tab.active { color: var(--accent-strong); border-bottom-color: var(--accent); }
 
-.bulk-bar { display: flex; gap: 8px; margin: 14px 0; flex-wrap: wrap; }
+.bulk-bar { display: flex; align-items: center; gap: 8px; margin: 14px 0; flex-wrap: wrap; }
 .bulk-portal { margin-left: auto; }
 .cards { display: flex; flex-direction: column; gap: 8px; }
 .card {
