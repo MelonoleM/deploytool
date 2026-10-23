@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 )
@@ -277,65 +278,91 @@ func (o *Orchestrator) run(ctx context.Context, action string, only []string, re
 		r.EndedAt = time.Now()
 		return &r
 	}
-	known := map[string]adapter.ServiceStatus{}
 	by := map[string]config.Service{}
 	for _, s := range svcs {
 		by[s.Name] = s
 	}
+	// Assign stable progress indices once, in the order batches are processed.
 	total := len(svcs)
+	idxBy := map[string]int{}
 	idx := 0
 	for _, batch := range batches {
 		for _, name := range batch {
+			idxBy[name] = idx
+			idx++
+		}
+	}
+
+	type outcome struct {
+		status adapter.ServiceStatus
+		failed bool
+	}
+
+	known := map[string]adapter.ServiceStatus{}
+	for _, batch := range batches {
+		results := make([]outcome, len(batch))
+		skips := make([]string, len(batch))
+
+		var wg sync.WaitGroup
+		for i, name := range batch {
 			s := by[name]
 			if !s.IsEnabled() {
-				notify(Progress{Service: name, Phase: "skipped", Reason: "disabled by configuration", Index: idx, Total: total})
-				x := adapter.ServiceStatus{Name: name, Skipped: true, Reason: "disabled by configuration"}
-				known[name] = x
-				r.Services = append(r.Services, x)
-				idx++
+				skips[i] = "disabled by configuration"
+				results[i] = outcome{status: adapter.ServiceStatus{Name: name, Skipped: true, Reason: "disabled by configuration"}}
 				continue
 			}
 			if !reverse && blocked(s, known) {
-				notify(Progress{Service: name, Phase: "skipped", Reason: "dependency was not successfully deployed", Index: idx, Total: total})
-				x := adapter.ServiceStatus{Name: name, Skipped: true, Reason: "dependency was not successfully deployed"}
-				known[name] = x
-				r.Services = append(r.Services, x)
-				r.Success = false
-				idx++
+				skips[i] = "dependency was not successfully deployed"
+				results[i] = outcome{status: adapter.ServiceStatus{Name: name, Skipped: true, Reason: "dependency was not successfully deployed"}, failed: true}
 				continue
 			}
-			notify(Progress{Service: name, Phase: "running", Index: idx, Total: total})
-			var x adapter.ServiceStatus
-			var er error
-			switch action {
-			case "install":
-				er = o.installOne(ctx, s, start)
-			case "start":
-				er = o.startOne(ctx, s)
-			case "stop":
-				er = o.stopOne(ctx, s)
-			case "uninstall":
-				er = o.uninstallOne(ctx, s)
+			wg.Add(1)
+			go func(name string, s config.Service, pos int) {
+				defer wg.Done()
+				notify(Progress{Service: name, Phase: "running", Index: idxBy[name], Total: total})
+				var er error
+				switch action {
+				case "install":
+					er = o.installOne(ctx, s, start)
+				case "start":
+					er = o.startOne(ctx, s)
+				case "stop":
+					er = o.stopOne(ctx, s)
+				case "uninstall":
+					er = o.uninstallOne(ctx, s)
+				}
+				x := o.status(ctx, s)
+				if er != nil {
+					o.Log.Error("service operation failed", "service", name, "action", action, "error", er)
+					x.Reason = fmt.Sprintf("%s failed: %v", action, er)
+					_ = o.Store.Log(action, name, "failed")
+					notify(Progress{Service: name, Phase: "failed", Reason: x.Reason, Index: idxBy[name], Total: total})
+				} else {
+					o.Log.Info("service operation completed", "service", name, "action", action)
+					_ = o.Store.Log(action, name, "success")
+					notify(Progress{Service: name, Phase: "done", Index: idxBy[name], Total: total})
+				}
+				results[pos] = outcome{status: x, failed: er != nil}
+			}(name, s, i)
+		}
+		wg.Wait()
+
+		batchFailed := false
+		for i, name := range batch {
+			res := results[i]
+			if skips[i] != "" {
+				notify(Progress{Service: name, Phase: "skipped", Reason: skips[i], Index: idxBy[name], Total: total})
 			}
-			x = o.status(ctx, s)
-			if er != nil {
-				o.Log.Error("service operation failed", "service", name, "action", action, "error", er)
-				x.Reason = fmt.Sprintf("%s failed: %v", action, er)
+			known[name] = res.status
+			r.Services = append(r.Services, res.status)
+			if res.failed {
 				r.Success = false
-				_ = o.Store.Log(action, name, "failed")
-				notify(Progress{Service: name, Phase: "failed", Reason: fmt.Sprintf("%s failed: %v", action, er), Index: idx, Total: total})
-			} else {
-				o.Log.Info("service operation completed", "service", name, "action", action)
-				_ = o.Store.Log(action, name, "success")
-				notify(Progress{Service: name, Phase: "done", Index: idx, Total: total})
+				batchFailed = true
 			}
-			known[name] = x
-			r.Services = append(r.Services, x)
-			idx++
-			if er != nil && o.Config.FailFast {
-				r.EndedAt = time.Now()
-				return &r
-			}
+		}
+		if batchFailed && o.Config.FailFast {
+			r.EndedAt = time.Now()
+			return &r
 		}
 	}
 	r.EndedAt = time.Now()
